@@ -20,6 +20,12 @@ and second is it to not zip our ai model
 and third is forcing the compiler to be form 2017 revised standard because ai libraries mainly work in this 
 and there is cmakelist.txt the location is app/src/main/cpp/
 it main works as a proper linker it links the c++ ui main activity etc properly and
+one last thing i downloaded the model from her 
+https://huggingface.co/adalat-ai/ct2-rotary-indictrans2-en-indic-dist-200M/tree/main/en-indic-200m-ct2/ctranslate2_model
+and u will need permission to access this 
+so create hugging face account and just accept the terms and condition u r eady to go the model size is 847 mb so downloaded that one and everything 
+is inside the git so dont worry
+
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 her is the location of ui file which is going too be handled by anamika so this section is to her 
 u can use your exampt prompt whatever the design and simply use chagtpt gemini claude whatever feeds photos of the ui and it will output text code
