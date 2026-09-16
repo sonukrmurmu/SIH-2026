@@ -70,33 +70,51 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             std::vector<std::string> raw_tokens;
             g_spm_source.Encode(sentence, &raw_tokens);
 
-            std::vector<std::string> source_tokens = {"eng_Latn", std::string(native_lang)};
+            // ---> FIX 1: Prepend <s> to absorb INT8 outliers, protecting the word "food"
+            std::vector<std::string> source_tokens = {"<s>", "eng_Latn"};
             for (const auto& t : raw_tokens) source_tokens.push_back(t);
             source_tokens.push_back("</s>");
 
             std::vector<std::vector<std::string>> batch = {source_tokens};
             std::vector<std::vector<std::string>> target_prefix = {{std::string(native_lang)}};
 
-            // ---> SPEED FIX: Greedy Search for instant translation speed
             ctranslate2::TranslationOptions options;
-            options.beam_size = 1;
+            // ---> FIX 2: Beam size 3 prevents greedy search from skipping short subjects
+            options.beam_size = 3;
             options.max_decoding_length = 256;
+            options.repetition_penalty = 1.0;
+            options.replace_unknowns = true;
 
             auto results = translator.translate_batch(batch, target_prefix, options);
             std::vector<std::string> output_tokens = results[0].hypotheses[0];
 
-            if (!output_tokens.empty() && output_tokens[0] == native_lang) {
+            // ---> FIX 3: Aggressively strip the leaked eng_Latn tag, Deva tags, and BOS tokens
+            while (!output_tokens.empty() &&
+                   (output_tokens.front().find("Deva") != std::string::npos ||
+                    output_tokens.front().find("Olck") != std::string::npos ||
+                    output_tokens.front() == "eng_Latn" ||
+                    output_tokens.front() == "<s>" ||
+                    output_tokens.front() == "</s>" ||
+                    output_tokens.front() == "<pad>")) {
                 output_tokens.erase(output_tokens.begin());
             }
 
             std::string decoded_chunk;
             g_spm_target.Decode(output_tokens, &decoded_chunk);
 
-            // ---> NEW BULLETPROOF CLEANUP: Erase the UTF-8 SentencePiece Unknown Token (⁇) and standard question marks
-            std::string utf8_unk = "\xE2\x81\x87";
-            if (decoded_chunk.find(utf8_unk) == 0) {
-                decoded_chunk.erase(0, 3);
+            // Clean up invisible SPM ⁇ and Android's native ??
+            std::vector<std::string> garbage = {
+                    "\xE2\x81\x87", // ⁇
+                    "\xEF\xBF\xBD"  // Android's ??
+            };
+            for (const auto& g : garbage) {
+                size_t pos;
+                while ((pos = decoded_chunk.find(g)) != std::string::npos) {
+                    decoded_chunk.replace(pos, g.length(), "");
+                }
             }
+
+            // Strip clinging spaces or leftover plain-text question marks
             while (!decoded_chunk.empty() && (decoded_chunk[0] == '?' || decoded_chunk[0] == ' ')) {
                 decoded_chunk.erase(0, 1);
             }
