@@ -1,4 +1,4 @@
-Markdown
+#Markdown
 
 # Indic Translation Android App (Santali & Regional Focus)
 
@@ -55,7 +55,8 @@ Key configurations implemented in the project build files:
 
 The app relies on a pre-trained IndicTrans2 model which must be downloaded and placed into the project assets.
 
-    Get Model Access:
+    Get Model Access: 
+https://huggingface.co/adalat-ai/ct2-rotary-indictrans2-en-indic-dist-200M/tree/main/en-indic-200m-ct2/ctranslate2_model?hl=en-GB
 
         Visit the Hugging Face Repository.
 
