@@ -10,8 +10,8 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-static sentencepiece::SentencePieceProcessor g_spm_source;
-static sentencepiece::SentencePieceProcessor g_spm_target;
+static sentencepiece::SentencePieceProcessor* g_spm_source = nullptr;
+static sentencepiece::SentencePieceProcessor* g_spm_target = nullptr;
 static std::string g_model_dir = "";
 
 std::vector<std::string> split_into_chunks(const std::string& text) {
@@ -29,20 +29,34 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_example_myapplication_MainActivity_initNativeTranslator(
         JNIEnv* env, jobject /* this */, jstring model_dir, jstring /* unused_spm_path */) {
 
+    if (g_spm_source != nullptr) { delete g_spm_source; g_spm_source = nullptr; }
+    if (g_spm_target != nullptr) { delete g_spm_target; g_spm_target = nullptr; }
+
     const char* native_model = env->GetStringUTFChars(model_dir, 0);
     g_model_dir = std::string(native_model);
 
     std::string src_path = g_model_dir + "/model.SRC";
     std::string tgt_path = g_model_dir + "/model.TGT";
 
+    g_spm_source = new sentencepiece::SentencePieceProcessor();
+    g_spm_target = new sentencepiece::SentencePieceProcessor();
+
     LOGI("Loading Source Dictionary: %s", src_path.c_str());
-    if (!g_spm_source.Load(src_path).ok()) return 1;
+    if (!g_spm_source->Load(src_path).ok()) return 1;
 
     LOGI("Loading Target Dictionary: %s", tgt_path.c_str());
-    if (!g_spm_target.Load(tgt_path).ok()) return 2;
+    if (!g_spm_target->Load(tgt_path).ok()) return 2;
 
     env->ReleaseStringUTFChars(model_dir, native_model);
     return 0;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_myapplication_MainActivity_unloadNativeTranslator(JNIEnv* env, jobject /* this */) {
+    if (g_spm_source != nullptr) { delete g_spm_source; g_spm_source = nullptr; }
+    if (g_spm_target != nullptr) { delete g_spm_target; g_spm_target = nullptr; }
+    g_model_dir = "";
+    LOGI("Native RAM wiped successfully.");
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -52,9 +66,10 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
     const char* native_text = env->GetStringUTFChars(text, 0);
     const char* native_lang = env->GetStringUTFChars(tgt_lang, 0);
 
-    if (g_model_dir.empty()) return env->NewStringUTF("Error: Engine paths not initialized.");
+    if (g_model_dir.empty() || g_spm_source == nullptr || g_spm_target == nullptr) {
+        return env->NewStringUTF("Error: Engine paths not initialized.");
+    }
 
-    // Auto-punctuation to stop the AI from outputting blank spaces for single words
     std::string input_text(native_text);
     if (!input_text.empty() && input_text.back() != '.' && input_text.back() != '?' && input_text.back() != '!') {
         input_text += ".";
@@ -68,10 +83,9 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
 
         for (const auto& sentence : sentences) {
             std::vector<std::string> raw_tokens;
-            g_spm_source.Encode(sentence, &raw_tokens);
+            g_spm_source->Encode(sentence, &raw_tokens);
 
-            // ---> FIX 1: Prepend <s> to absorb INT8 outliers, protecting the word "food"
-            std::vector<std::string> source_tokens = {"<s>", "eng_Latn"};
+            std::vector<std::string> source_tokens = {"eng_Latn"};
             for (const auto& t : raw_tokens) source_tokens.push_back(t);
             source_tokens.push_back("</s>");
 
@@ -79,43 +93,37 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             std::vector<std::vector<std::string>> target_prefix = {{std::string(native_lang)}};
 
             ctranslate2::TranslationOptions options;
-            // ---> FIX 2: Beam size 3 prevents greedy search from skipping short subjects
             options.beam_size = 3;
             options.max_decoding_length = 256;
-            options.repetition_penalty = 1.0;
+            options.repetition_penalty = 1.3;
             options.replace_unknowns = true;
 
             auto results = translator.translate_batch(batch, target_prefix, options);
             std::vector<std::string> output_tokens = results[0].hypotheses[0];
 
-            // ---> FIX 3: Aggressively strip the leaked eng_Latn tag, Deva tags, and BOS tokens
             while (!output_tokens.empty() &&
                    (output_tokens.front().find("Deva") != std::string::npos ||
                     output_tokens.front().find("Olck") != std::string::npos ||
                     output_tokens.front() == "eng_Latn" ||
-                    output_tokens.front() == "<s>" ||
                     output_tokens.front() == "</s>" ||
                     output_tokens.front() == "<pad>")) {
                 output_tokens.erase(output_tokens.begin());
             }
 
             std::string decoded_chunk;
-            g_spm_target.Decode(output_tokens, &decoded_chunk);
+            g_spm_target->Decode(output_tokens, &decoded_chunk);
 
-            // Clean up invisible SPM ⁇ and Android's native ??
-            std::vector<std::string> garbage = {
-                    "\xE2\x81\x87", // ⁇
-                    "\xEF\xBF\xBD"  // Android's ??
-            };
-            for (const auto& g : garbage) {
-                size_t pos;
-                while ((pos = decoded_chunk.find(g)) != std::string::npos) {
-                    decoded_chunk.replace(pos, g.length(), "");
-                }
+            // Bulletproof Cleanup
+            std::string utf8_unk = "\xE2\x81\x87";
+            if (decoded_chunk.find(utf8_unk) == 0) {
+                decoded_chunk.erase(0, 3);
+            }
+            std::string android_unk = "\xEF\xBF\xBD";
+            while (decoded_chunk.find(android_unk) != std::string::npos) {
+                decoded_chunk.replace(decoded_chunk.find(android_unk), 3, "");
             }
 
-            // Strip clinging spaces or leftover plain-text question marks
-            while (!decoded_chunk.empty() && (decoded_chunk[0] == '?' || decoded_chunk[0] == ' ')) {
+            while (!decoded_chunk.empty() && (decoded_chunk[0] == '?' || decoded_chunk[0] == ' ' || decoded_chunk[0] == ',')) {
                 decoded_chunk.erase(0, 1);
             }
 
@@ -130,7 +138,6 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
     env->ReleaseStringUTFChars(text, native_text);
     env->ReleaseStringUTFChars(tgt_lang, native_lang);
 
-    // Strip the final trailing space added by the loop
     if (!final_stitched_text.empty() && final_stitched_text.back() == ' ') {
         final_stitched_text.pop_back();
     }

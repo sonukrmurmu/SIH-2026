@@ -21,9 +21,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var santaliResult: TextView
     private lateinit var progressBar: ProgressBar
 
-    // ---> NEW: Declare the database helper
     private lateinit var dictHelper: DictionaryDbHelper
-
     private var isEngineReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,7 +35,6 @@ class MainActivity : AppCompatActivity() {
         santaliResult = findViewById(R.id.santaliResult)
         progressBar = findViewById(R.id.progressBar)
 
-        // ---> NEW: Initialize the database helper right away
         dictHelper = DictionaryDbHelper(this)
 
         try {
@@ -74,31 +71,22 @@ class MainActivity : AppCompatActivity() {
                 progressBar.visibility = View.VISIBLE
                 hindiResult.text = "Translating..."
 
-                // ---> NEW: Hybrid Logic - Check word count
-                val wordCount = textToTranslate.split("\\s+".toRegex()).size
-                var localSantaliMatch: String? = null
-
-                // If 1 or 2 words, check the instant SQLite database first
-                if (wordCount <= 2) {
-                    localSantaliMatch = dictHelper.lookup(textToTranslate)
-                }
+                // Override AI entirely if phrase is mapped in SQLite database
+                var localSantaliMatch: String? = dictHelper.lookup(textToTranslate)
 
                 if (localSantaliMatch != null) {
-                    santaliResult.text = localSantaliMatch // Instant DB result!
+                    santaliResult.text = localSantaliMatch
                 } else {
                     santaliResult.text = "Translating..."
                 }
 
-                // Run AI inference in the background
                 thread {
-                    // Always translate Hindi via neural network
-                    val hindi = translateNativeText(textToTranslate, "hin_Deva")
+                    val hindi = translateWithBulletproofShield(textToTranslate, "hin_Deva")
 
-                    // ---> NEW: Only run Santali neural translation if it WASN'T in the database
                     val santali = if (localSantaliMatch != null) {
                         localSantaliMatch
                     } else {
-                        translateNativeText(textToTranslate, "sat_Olck")
+                        translateWithBulletproofShield(textToTranslate, "sat_Olck")
                     }
 
                     runOnUiThread {
@@ -109,6 +97,48 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun translateWithBulletproofShield(userText: String, targetLang: String): String {
+        val dummyInput = "Part one. "
+        val shieldedInput = "$dummyInput$userText"
+
+        var rawOutput = translateNativeText(shieldedInput, targetLang)
+        val originalRaw = rawOutput // Keep a backup in case we strip too much
+
+        // 1. The Regex Split
+        val parts = rawOutput.split(Regex("[।᱾.]"), limit = 2)
+        if (parts.size > 1 && parts[1].isNotBlank()) {
+            rawOutput = parts[1].trim()
+        } else {
+            val knownDummyOutputs = listOf("भाग एक", "भाग 1", "भाग १", "हाटीञ मिद्", "Part one", "Occe", "कर रहे है")
+            for (dummy in knownDummyOutputs) {
+                if (rawOutput.contains(dummy, ignoreCase = true)) {
+                    rawOutput = rawOutput.replaceFirst(Regex(".*?$dummy\\s*"), "").trim()
+                    break
+                }
+            }
+        }
+
+        // 2. Strip leading artifacts safely
+        val garbageChars = charArrayOf(' ', ',', '?', '.', '।', '᱾')
+        while (rawOutput.isNotEmpty() && garbageChars.contains(rawOutput.first())) {
+            rawOutput = rawOutput.substring(1).trim()
+        }
+
+        // ---> SAFETY NET: If stripping made it completely empty, return the backup instead of blank text
+        if (rawOutput.isBlank()) {
+            return originalRaw.ifBlank { "Translation Error" }
+        }
+
+        return rawOutput
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isEngineReady) {
+            unloadNativeTranslator()
         }
     }
 
@@ -150,6 +180,7 @@ class MainActivity : AppCompatActivity() {
 
     external fun initNativeTranslator(modelDir: String, spmPath: String): Int
     external fun translateNativeText(text: String, tgtLang: String): String
+    external fun unloadNativeTranslator()
 
     companion object {
         init {
