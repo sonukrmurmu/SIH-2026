@@ -104,9 +104,13 @@ class MainActivity : AppCompatActivity() {
         val dummyInput = "Part one. "
         val shieldedInput = "$dummyInput$userText"
 
-        var rawOutput = translateNativeText(shieldedInput, targetLang)
-        val originalRaw = rawOutput // Keep a backup in case we strip too much
+        Log.i("SIH_AI", "LAYER 1 [KOTLIN SEND] ($targetLang): $shieldedInput")
 
+        var rawOutput = translateNativeText(shieldedInput, targetLang)
+
+        Log.i("SIH_AI", "LAYER 5 [KOTLIN RAW RECEIVE] ($targetLang): $rawOutput")
+
+        val originalRaw = rawOutput // Keep a backup in case we strip too much
         // 1. The Regex Split
         val parts = rawOutput.split(Regex("[।᱾.]"), limit = 2)
         if (parts.size > 1 && parts[1].isNotBlank()) {

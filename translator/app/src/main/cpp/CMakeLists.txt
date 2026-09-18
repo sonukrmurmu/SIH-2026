@@ -47,7 +47,10 @@ add_library(
         native-lib.cpp)
 
 # Tell the compiler where the SentencePiece headers are
-target_include_directories(sihtranslator PRIVATE ${sentencepiece_SOURCE_DIR}/src)
+target_include_directories(sihtranslator PRIVATE
+        ${sentencepiece_SOURCE_DIR}/src
+        ${ctranslate2_SOURCE_DIR}/include
+)
 
 # 4. Link the AI engines and Android logging to your native bridge
 target_link_libraries(

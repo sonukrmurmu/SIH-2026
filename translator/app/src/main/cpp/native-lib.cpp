@@ -2,9 +2,13 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <chrono>
 #include <android/log.h>
 #include <ctranslate2/translator.h>
+#include <ctranslate2/replica_pool.h>
 #include <sentencepiece_processor.h>
+#include <thread>
+#include <algorithm>
 
 #define LOG_TAG "SIH_AI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -13,6 +17,7 @@
 static sentencepiece::SentencePieceProcessor* g_spm_source = nullptr;
 static sentencepiece::SentencePieceProcessor* g_spm_target = nullptr;
 static std::string g_model_dir = "";
+static ctranslate2::Translator* g_translator = nullptr;
 
 std::vector<std::string> split_into_chunks(const std::string& text) {
     std::vector<std::string> chunks;
@@ -47,9 +52,15 @@ Java_com_example_myapplication_MainActivity_initNativeTranslator(
     LOGI("Loading Target Dictionary: %s", tgt_path.c_str());
     if (!g_spm_target->Load(tgt_path).ok()) return 2;
 
+    g_translator = new ctranslate2::Translator(
+            g_model_dir,
+            ctranslate2::Device::CPU,
+            ctranslate2::ComputeType::INT8
+    );
     env->ReleaseStringUTFChars(model_dir, native_model);
     return 0;
 }
+
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_myapplication_MainActivity_unloadNativeTranslator(JNIEnv* env, jobject /* this */) {
@@ -65,6 +76,7 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
 
     const char* native_text = env->GetStringUTFChars(text, 0);
     const char* native_lang = env->GetStringUTFChars(tgt_lang, 0);
+    LOGI("LAYER 2 [C++ ENTRY]: Received string from Kotlin: %s", native_text);
 
     if (g_model_dir.empty() || g_spm_source == nullptr || g_spm_target == nullptr) {
         return env->NewStringUTF("Error: Engine paths not initialized.");
@@ -78,9 +90,8 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
     std::string final_stitched_text = "";
     std::vector<std::string> sentences = split_into_chunks(input_text);
 
-    try {
-        ctranslate2::Translator translator(g_model_dir, ctranslate2::Device::CPU, ctranslate2::ComputeType::INT8);
 
+    try {
         for (const auto& sentence : sentences) {
             std::vector<std::string> raw_tokens;
             g_spm_source->Encode(sentence, &raw_tokens);
@@ -95,10 +106,18 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             ctranslate2::TranslationOptions options;
             options.beam_size = 3;
             options.max_decoding_length = 256;
-            options.repetition_penalty = 1.3;
+            options.end_token = "</s>";
+            options.repetition_penalty = 1.5;
             options.replace_unknowns = true;
 
-            auto results = translator.translate_batch(batch, target_prefix, options);
+            LOGI("LAYER 3 [ENGINE START]: Passing data to AI Engine now...");
+            auto start_time = std::chrono::high_resolution_clock::now();
+
+            auto results = g_translator->translate_batch(batch, target_prefix, options);
+
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            LOGI("LAYER 4 [ENGINE STOP]: Output generated in %lld ms.", (long long)duration);
             std::vector<std::string> output_tokens = results[0].hypotheses[0];
 
             while (!output_tokens.empty() &&
