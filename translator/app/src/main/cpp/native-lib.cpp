@@ -99,6 +99,7 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             std::vector<std::string> source_tokens = {"eng_Latn"};
             for (const auto& t : raw_tokens) source_tokens.push_back(t);
             source_tokens.push_back("</s>");
+            source_tokens.push_back(std::string(native_lang));
 
             std::vector<std::vector<std::string>> batch = {source_tokens};
             std::vector<std::vector<std::string>> target_prefix = {{std::string(native_lang)}};

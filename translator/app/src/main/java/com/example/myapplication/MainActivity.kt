@@ -101,7 +101,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun translateWithBulletproofShield(userText: String, targetLang: String): String {
-        val dummyInput = "Part one. "
+        val dummyInput = "1 "
         val shieldedInput = "$dummyInput$userText"
 
         Log.i("SIH_AI", "LAYER 1 [KOTLIN SEND] ($targetLang): $shieldedInput")
@@ -116,7 +116,7 @@ class MainActivity : AppCompatActivity() {
         if (parts.size > 1 && parts[1].isNotBlank()) {
             rawOutput = parts[1].trim()
         } else {
-            val knownDummyOutputs = listOf("भाग एक", "भाग 1", "भाग १", "हाटीञ मिद्", "Part one", "Occe", "कर रहे है")
+            val knownDummyOutputs = listOf("एक ","१ ", "1 ", "१ ", "᱑ ","Occe", "कर रहे है")
             for (dummy in knownDummyOutputs) {
                 if (rawOutput.contains(dummy, ignoreCase = true)) {
                     rawOutput = rawOutput.replaceFirst(Regex(".*?$dummy\\s*"), "").trim()
