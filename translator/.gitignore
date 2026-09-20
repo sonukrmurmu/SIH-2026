@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Ignore Heavy AI Engine Models
+app/src/main/assets/indic-eng/
+app/src/main/assets/indictrans2_200m/
+*.bin
+model.SRC
+model.TGT

@@ -58,3 +58,20 @@ target_link_libraries(
         sentencepiece-static
         ctranslate2
         log)
+
+# 5. Create Engine 2: Indic-to-English JNI bridge
+add_library(
+        sih_indic_to_en
+        SHARED
+        native-indic-en.cpp)
+
+target_include_directories(sih_indic_to_en PRIVATE
+        ${sentencepiece_SOURCE_DIR}/src
+        ${ctranslate2_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+        sih_indic_to_en
+        sentencepiece-static
+        ctranslate2
+        log)

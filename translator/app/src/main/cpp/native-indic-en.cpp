@@ -5,7 +5,6 @@
 #include <chrono>
 #include <android/log.h>
 #include <ctranslate2/translator.h>
-#include <ctranslate2/replica_pool.h>
 #include <sentencepiece_processor.h>
 #include <thread>
 #include <algorithm>
@@ -31,7 +30,7 @@ std::vector<std::string> split_into_chunks(const std::string& text) {
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_example_myapplication_MainActivity_initNativeTranslator(
+Java_com_example_myapplication_MainActivity_initNativeIndicToEng(
         JNIEnv* env, jobject /* this */, jstring model_dir, jstring /* unused_spm_path */) {
 
     // 1. RESTART CRASH FIX: If already in RAM from last session, do not reload!
@@ -69,13 +68,13 @@ Java_com_example_myapplication_MainActivity_initNativeTranslator(
         LOGE("Failed to boot CTranslate2 Engine: %s", e.what());
         return 3;
     }
-
     env->ReleaseStringUTFChars(model_dir, native_model);
     return 0;
 }
 
+
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_myapplication_MainActivity_unloadNativeTranslator(JNIEnv* env, jobject /* this */) {
+Java_com_example_myapplication_MainActivity_unloadNativeIndicToEng(JNIEnv* env, jobject /* this */) {
     if (g_spm_source != nullptr) { delete g_spm_source; g_spm_source = nullptr; }
     if (g_spm_target != nullptr) { delete g_spm_target; g_spm_target = nullptr; }
 
@@ -88,15 +87,13 @@ Java_com_example_myapplication_MainActivity_unloadNativeTranslator(JNIEnv* env, 
     g_model_dir = "";
     LOGI("Engine 2 Native RAM wiped successfully.");
 }
-
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_myapplication_MainActivity_translateNativeText(
-        JNIEnv* env, jobject /* this */, jstring text, jstring src_lang, jstring tgt_lang) {
+Java_com_example_myapplication_MainActivity_translateIndicToEng(
+        JNIEnv* env, jobject /* this */, jstring text, jstring src_lang) {
 
     const char* native_text = env->GetStringUTFChars(text, 0);
     const char* native_src = env->GetStringUTFChars(src_lang, 0);
-    const char* native_tgt = env->GetStringUTFChars(tgt_lang, 0);
-    LOGI("LAYER 2 [C++ ENTRY]: Received string from Kotlin: %s", native_text);
+    LOGI("LAYER 2 [C++ ENTRY]: Received string from Kotlin: %s | Source Lang: %s", native_text, native_src);
 
     if (g_translator == nullptr || g_model_dir.empty() || g_spm_source == nullptr || g_spm_target == nullptr) {
         return env->NewStringUTF("Error: AI Engine is NULL. The models failed to load.");
@@ -119,13 +116,13 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             std::vector<std::string> source_tokens = {std::string(native_src)};
             for (const auto& t : raw_tokens) source_tokens.push_back(t);
             source_tokens.push_back("</s>");
-            source_tokens.push_back(std::string(native_tgt));
+            source_tokens.push_back("eng_Latn");
 
             std::vector<std::vector<std::string>> batch = {source_tokens};
-            std::vector<std::vector<std::string>> target_prefix = {{std::string(native_tgt)}};
+            std::vector<std::vector<std::string>> target_prefix = {{"eng_Latn"}};
 
             ctranslate2::TranslationOptions options;
-            options.beam_size = 2;
+            options.beam_size = 3;
             options.max_decoding_length = std::max((size_t)25, (size_t)(raw_tokens.size() * 2 + 10));
             options.end_token = "</s>";
             options.repetition_penalty = 1.3;
@@ -142,9 +139,11 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
             std::vector<std::string> output_tokens = results[0].hypotheses[0];
 
             while (!output_tokens.empty() &&
-                   (output_tokens.front().find("Deva") != std::string::npos ||
+                   (output_tokens.front() == "eng_Latn" ||
+                    output_tokens.front() == std::string(native_src) ||
+                    output_tokens.front().find("Latn") != std::string::npos ||
+                    output_tokens.front().find("Deva") != std::string::npos ||
                     output_tokens.front().find("Olck") != std::string::npos ||
-                    output_tokens.front() == "eng_Latn" ||
                     output_tokens.front() == "</s>" ||
                     output_tokens.front() == "<pad>")) {
                 output_tokens.erase(output_tokens.begin());
@@ -177,7 +176,6 @@ Java_com_example_myapplication_MainActivity_translateNativeText(
 
     env->ReleaseStringUTFChars(text, native_text);
     env->ReleaseStringUTFChars(src_lang, native_src);
-    env->ReleaseStringUTFChars(tgt_lang, native_tgt);
 
     if (!final_stitched_text.empty() && final_stitched_text.back() == ' ') {
         final_stitched_text.pop_back();
