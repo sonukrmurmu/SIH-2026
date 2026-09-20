@@ -27,23 +27,20 @@ Plaintext
 
 🧠 Core Architecture & Components
 
-Native AI Layer (C++ / JNI):
-Located in app/src/main/cpp/, this layer handles the heavy lifting of passing text data cleanly from the Android UI into the CTranslate2 model runtime. It is a fully offline, high-performance inference engine optimized specifically for mobile ARM processors. It utilizes INT8 Quantization and strict 4-thread pooling per replica to prevent OEM background throttling (e.g., ColorOS deadlocks) and guarantees sub-3-second generation latency while actively preventing Out-of-Memory (OOM) leaks.
+    Native AI Layer (C++ / JNI): Located in app/src/main/cpp/, this layer handles the heavy lifting of passing text data cleanly from the Android UI into the CTranslate2 model runtime. It is a fully offline, high-performance inference engine optimized specifically for mobile ARM processors. It utilizes INT8 Quantization and strict 4-thread pooling per replica to prevent OEM background throttling (e.g., ColorOS deadlocks) and guarantees sub-3-second generation latency while actively preventing Out-of-Memory (OOM) leaks.
 
-Kotlin Logic (MainActivity.kt):
-Manages user input from the UI, triggers the C++ translation engine, receives the output, and updates the display screen. It dynamically routes text through one of three pathways securely on a background thread boosted with Thread.MAX_PRIORITY:
+    Kotlin Logic (MainActivity.kt): Manages user input from the UI, triggers the C++ translation engine, receives the output, and updates the display screen. It dynamically routes text through one of three pathways securely on a background thread boosted with Thread.MAX_PRIORITY:
 
-    Single Engine: Direct translation (English -> Indic or Indic -> English).
+        Single Engine: Direct translation (English -> Indic or Indic -> English).
 
-    Dual-Engine Relay: For Indic-to-Indic translations (e.g., Hindi -> Santali), it executes a seamless background relay (Engine 2 -> English -> Engine 1) while maintaining a stable UI state.
+        Dual-Engine Relay: For Indic-to-Indic translations (e.g., Hindi -> Santali), it executes a seamless background relay (Engine 2 -> English -> Engine 1) while maintaining a stable UI state.
 
-    Safety Net: All C++ calls are wrapped in robust memory-state checks to prevent silent native crashes (SIGSEGV) from freezing the UI.
+        Safety Net: All C++ calls are wrapped in robust memory-state checks to prevent silent native crashes (SIGSEGV) from freezing the UI.
 
-Dictionary Correction Kit (DictionaryDb):
-An intelligent post-processing layer and local SQLite interceptor. Before passing complex regional terminology to the AI matrix, it cross-references a local database (1,000+ words) to correct occasional model inaccuracies for specific terminology. If an exact match is found, it bypasses the heavy C++ math entirely, achieving 0ms latency and 100% precision for critical edge cases.
+    Dictionary Correction Kit (DictionaryDb): An intelligent post-processing layer and local SQLite interceptor. Before passing complex regional terminology to the AI matrix, it cross-references a local database (1,000+ words) to correct occasional model inaccuracies for specific terminology. If an exact match is found, it bypasses the heavy C++ math entirely, achieving 0ms latency and 100% precision for critical edge cases.
 
-UI Layout & Resources (activity_main.xml & strings.xml):
-Located under app/src/main/res/. Note: UI design and layout implementation are handled by Anamika. It features custom font rendering capabilities to perfectly display regional scripts like Santali Ol Chiki. Additionally, strings.xml serves as the centralized database for all static text. It defines the official app identity, UI button labels, and the string arrays that populate the source and target language dropdown Spinners, ensuring the Kotlin logic remains clean and fully localizable.
+    UI Layout & Resources (activity_main.xml & strings.xml): Located under app/src/main/res/. Note: UI design and layout implementation are handled by Anamika. It features custom font rendering capabilities to perfectly display regional scripts like Santali Ol Chiki. Additionally, strings.xml serves as the centralized database for all static text. It defines the official app identity, UI button labels, and the string arrays that populate the source and target language dropdown Spinners, ensuring the Kotlin logic remains clean and fully localizable.
+
 ⚙️ Build & Configuration Highlights (build.gradle.kts)
 
 Key configurations implemented in the project build files for local AI inference:
@@ -58,19 +55,21 @@ Key configurations implemented in the project build files for local AI inference
 
 The app relies on a dual-pipeline architecture utilizing two pre-trained IndicTrans2 models, which must be downloaded and placed into the project assets.
 
-1. Get Model Access:
+    Get Model Access:
 
-    Visit the Adalat AI Hugging Face Repository for the CTranslate2 distil models:
-    Hugging Face Repo - https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M/tree/main
-    Hugging Face Repo - https://huggingface.co/adalat-ai/ct2-rotary-indictrans2-indic-en-dist-200M/tree/main
+        Visit the Adalat AI Hugging Face Repository for the CTranslate2 distil models:
 
-    Log in to your Hugging Face account and accept the terms and conditions to gain access.
+            Hugging Face Repo - English to Indic
 
-2. Download & Place the Models:
+            Hugging Face Repo - Indic to English
 
-    Engine 1 (English to Indic): Download the model files (~847 MB) and place the directory inside app/src/main/assets/indictrans2_200m/.
+        Log in to your Hugging Face account and accept the terms and conditions to gain access.
 
-    Engine 2 (Indic to English): Download the corresponding reverse model files and place the directory inside app/src/main/assets/indic-eng/.
+    Download & Place the Models:
+
+        Engine 1 (English to Indic): Download the model files (~847 MB) and place the directory inside app/src/main/assets/indictrans2_200m/.
+
+        Engine 2 (Indic to English): Download the corresponding reverse model files and place the directory inside app/src/main/assets/indic-eng/.
 
 ⚠️ Critical GitHub Warning:
 Because the model.bin files exceed GitHub's 100MB limit, they are explicitly ignored in the .gitignore file. Never attempt to force-push the .bin files, or your commit history will lock up.
