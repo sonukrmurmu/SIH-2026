@@ -1,17 +1,15 @@
 Indic Translation Android App (Santali & Regional Focus)
 
 An Android application designed to perform offline/edge translation using a custom CTranslate2 IndicTrans2 model, optimized with a local fallback dictionary and native C++ integration.
-📂 Project Directory Structure
-Plaintext
-
+```text
 /translator/
 ├── app/src/main/
 │   ├── cpp/                       # C++ native engine & CMake configuration
 │   │   ├── CMakeLists.txt         # Links native AI libraries (CTranslate2, SentencePiece) and UI components
 │   │   └── native-lib.cpp         # Handles AI model boot, memory management, INT8 optimization, and dual-engine routing
 │   ├── java/ or kotlin/           # App source code (UI & logic handlers)
-│   │   ├── .../MainActivity.kt    # Handles UI input, thread management, AI routing (Relay/Bypass), and UI updates
-│   │   └── .../DictionaryDb.kt    # Post-processes/analyzes dictionary overrides for zero-latency direct translations
+│   │   ├── MainActivity.kt        # Handles UI input, thread management, AI routing (Relay/Bypass), and UI updates
+│   │   └── DictionaryDb.kt        # Post-processes/analyzes dictionary overrides for zero-latency direct translations
 │   ├── res/                       # App resources
 │   │   ├── font/                  # Custom font files (e.g., noto_sans_ol_chiki for Santali)
 │   │   ├── layout/
@@ -23,8 +21,7 @@ Plaintext
 │   │   ├── indictrans2_200m/      # CTranslate2 Engine 1: English -> Indic AI Model
 │   │   └── indic-eng/             # CTranslate2 Engine 2: Indic -> English AI Model
 │   └── AndroidManifest.xml        # App permissions and configurations
-└── build.gradle.kts               # Global/App-level build configurations
-
+└── build.gradle.kts               # Global/App-level build configurations  ```text
 🧠 Core Architecture & Components
 
     Native AI Layer (C++ / JNI): Located in app/src/main/cpp/, this layer handles the heavy lifting of passing text data cleanly from the Android UI into the CTranslate2 model runtime. It is a fully offline, high-performance inference engine optimized specifically for mobile ARM processors. It utilizes INT8 Quantization and strict 4-thread pooling per replica to prevent OEM background throttling (e.g., ColorOS deadlocks) and guarantees sub-3-second generation latency while actively preventing Out-of-Memory (OOM) leaks.
