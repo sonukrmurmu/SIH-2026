@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">IndicT</string>
+
+    <string-array name="language_options">
+        <item>English</item>
+        <item>Hindi</item>
+        <item>Santali</item>
+    </string-array>
+
+    <string-array name="accuracy_options">
+        <item>5 (Fastest - Sub 1s)</item>
+        <item>4 (Fast - ~1.5s)</item>
+        <item>3 (Balanced - ~2.5s)</item>
+        <item>2 (High Accuracy)</item>
+        <item>1 (Max Accuracy)</item>
+    </string-array>
+</resources>
